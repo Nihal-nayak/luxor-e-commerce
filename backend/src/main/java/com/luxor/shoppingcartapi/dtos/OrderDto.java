@@ -22,4 +22,8 @@ public class OrderDto {
     private String shippingState;
     private String shippingPincode;
     private PaymentStatus paymentStatus;
+
+    /** Populated for admin order views only */
+    private String customerName;
+    private String customerEmail;
 }

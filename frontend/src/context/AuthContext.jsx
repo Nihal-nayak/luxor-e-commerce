@@ -98,11 +98,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const isAdmin = user?.role === 'ADMIN';
+
   const value = {
     token,
     user,
     isAuthenticated,
     isAuthLoading,
+    isAdmin,
     login,
     logout,
   };

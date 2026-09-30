@@ -9,7 +9,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 
-public interface productRepository extends JpaRepository<Product , Long> {
+public interface productRepository extends JpaRepository<Product, Long> {
+
+    boolean existsByCategoryId(Long categoryId);
 
     Page<Product> findByCategoryId(Long categoryId, Pageable pageable);
 

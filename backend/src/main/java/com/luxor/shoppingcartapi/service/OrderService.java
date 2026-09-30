@@ -142,6 +142,35 @@ public class OrderService {
         return orderMapper.toDto(order);
     }
 
+    public List<OrderDto> getAllOrdersForAdmin() {
+
+        return orderRepository.findAllByOrderByCreatedAtDesc()
+                .stream()
+                .map(this::toAdminDto)
+                .toList();
+    }
+
+    public OrderDto getOrderForAdmin(Long orderId) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("Order not found"));
+
+        return toAdminDto(order);
+    }
+
+    private OrderDto toAdminDto(Order order) {
+
+        OrderDto dto = orderMapper.toDto(order);
+
+        User user = order.getUser();
+        if (user != null) {
+            dto.setCustomerName(user.getName());
+            dto.setCustomerEmail(user.getEmail());
+        }
+
+        return dto;
+    }
 
     @Transactional
     public OrderDto updateOrderStatus(

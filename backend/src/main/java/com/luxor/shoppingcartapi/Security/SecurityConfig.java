@@ -63,8 +63,8 @@ public class SecurityConfig {
 
                 .csrf(AbstractHttpConfigurer::disable)
 
-                // Enable CORS
-                .cors(c -> {})
+                // Enable CORS (reuse corsConfigurationSource bean)
+                .cors(c -> c.configurationSource(corsConfigurationSource()))
 
                 .authorizeHttpRequests(c -> c
 
@@ -80,6 +80,10 @@ public class SecurityConfig {
 
                         // Product browsing is public (read-only)
                         .requestMatchers(HttpMethod.GET, "/products", "/products/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/category").permitAll()
+
+                        // Admin API namespace
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
 
                         // Everything else requires JWT
                         .anyRequest().authenticated()
@@ -103,7 +107,7 @@ public class SecurityConfig {
         );
 
         configuration.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         );
 
         configuration.setAllowedHeaders(

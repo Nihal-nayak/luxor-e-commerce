@@ -1,66 +1,84 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ProductGrid from '../components/product/ProductGrid'
 
-const CATEGORIES = ['All']
-
 function Shop() {
-  const [activeCategory, setActiveCategory] = useState('All')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const initialCategoryId = searchParams.get('categoryId')
+    ? Number(searchParams.get('categoryId'))
+    : null
+
+  const [activeCategoryId, setActiveCategoryId] = useState(initialCategoryId)
   const [sortBy, setSortBy] = useState('featured')
   const [products, setProducts] = useState([])
-  const [categories, setCategories] = useState(CATEGORIES)
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        // GET /products is now public — no auth header needed
-        const res = await fetch('http://localhost:8080/products?size=100')
-        if (!res.ok) throw new Error(`Failed to load products (${res.status})`)
-        const data = await res.json()
+  const categoryMap = categories.reduce((acc, c) => {
+    acc[c.id] = c.name
+    return acc
+  }, {})
 
-        // Backend returns a Page<ProductDto>: { content: [...], totalElements, ... }
-        const items = data.content ?? data
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-        // Normalise to the shape the rest of the UI expects
-        const normalised = items.map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: Number(p.price),
-          description: p.desc,
-          image: p.imageUrl || '',
-          // categoryId comes from the backend; we'll resolve names after we have all items
-          categoryId: p.categoryId,
-          category: p.categoryId ? `Category ${p.categoryId}` : 'Uncategorized',
-          stockQuantity: p.stockQuantity,
-        }))
+      const [productsRes, categoriesRes] = await Promise.all([
+        fetch('http://localhost:8080/products?size=100'),
+        fetch('http://localhost:8080/category'),
+      ])
 
-        // Derive unique category labels (we use the categoryId-based label for now;
-        // when a Category endpoint is wired up this can be updated to real names)
-        const uniqueCategories = [
-          'All',
-          ...new Set(normalised.map((p) => p.category)),
-        ]
+      if (!productsRes.ok) throw new Error(`Failed to load products (${productsRes.status})`)
+      if (!categoriesRes.ok) throw new Error(`Failed to load categories (${categoriesRes.status})`)
 
-        setProducts(normalised)
-        setCategories(uniqueCategories)
-      } catch (err) {
-        console.error(err)
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+      const productsData = await productsRes.json()
+      const categoriesData = await categoriesRes.json()
+
+      const categoryList = Array.isArray(categoriesData) ? categoriesData : []
+      setCategories(categoryList)
+
+      const catMap = categoryList.reduce((acc, c) => { acc[c.id] = c.name; return acc }, {})
+
+      const items = productsData.content ?? productsData
+      const normalised = items.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        description: p.desc,
+        image: p.imageUrl || '',
+        categoryId: p.categoryId,
+        category: catMap[p.categoryId] ?? '',
+        stockQuantity: p.stockQuantity,
+      }))
+
+      setProducts(normalised)
+    } catch (err) {
+      console.error(err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-
-    fetchProducts()
   }, [])
 
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    if (activeCategoryId != null) {
+      setSearchParams({ categoryId: String(activeCategoryId) }, { replace: true })
+    } else {
+      setSearchParams({}, { replace: true })
+    }
+  }, [activeCategoryId, setSearchParams])
+
   const filteredProducts =
-    activeCategory === 'All'
+    activeCategoryId == null
       ? products
-      : products.filter((p) => p.category === activeCategory)
+      : products.filter((p) => p.categoryId === activeCategoryId)
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     if (sortBy === 'price-asc') return a.price - b.price
@@ -69,81 +87,95 @@ function Shop() {
   })
 
   return (
-    <main className="bg-neutral-50">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
-        <header className="max-w-2xl">
-          <p className="text-sm font-medium uppercase tracking-[0.25em] text-neutral-500">
+    <main className="bg-neutral-50 min-h-[calc(100vh-72px)]">
+      <div className="mx-auto max-w-7xl px-6 py-12 sm:py-16 lg:px-8 lg:py-20">
+        {/* Page Header */}
+        <header className="max-w-2xl animate-fade-in-up">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-400">
             Collection
           </p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl lg:text-5xl">
             Shop All Products
           </h1>
-          <p className="mt-4 text-base leading-relaxed text-neutral-600 sm:text-lg">
+          <p className="mt-4 text-base leading-relaxed text-neutral-500 sm:text-lg">
             Curated essentials and statement pieces, designed for modern living.
           </p>
         </header>
 
-        <div className="mt-10 flex flex-col gap-6 border-b border-neutral-200 pb-8 lg:flex-row lg:items-center lg:justify-between">
-          <div
-            className="flex flex-wrap gap-2"
-            role="group"
-            aria-label="Filter by category"
-          >
-            {categories.map((category) => {
-              const isActive = activeCategory === category
+        {/* Filters & Sort */}
+        <div className="mt-10 flex flex-col gap-6 border-b border-neutral-200 pb-8 lg:flex-row lg:items-center lg:justify-between animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by category">
+            <button
+              type="button"
+              onClick={() => setActiveCategoryId(null)}
+              aria-pressed={activeCategoryId == null}
+              className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 ${
+                activeCategoryId == null
+                  ? 'bg-neutral-900 text-white shadow-sm'
+                  : 'bg-white text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50 hover:text-neutral-900'
+              }`}
+            >
+              All
+            </button>
+            {categories.map((cat) => {
+              const isActive = activeCategoryId === cat.id
               return (
                 <button
-                  key={category}
+                  key={cat.id}
                   type="button"
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => setActiveCategoryId(cat.id)}
                   aria-pressed={isActive}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                  className={`rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-neutral-900 text-white'
-                      : 'bg-white text-neutral-700 ring-1 ring-neutral-200 hover:bg-neutral-100'
+                      ? 'bg-neutral-900 text-white shadow-sm'
+                      : 'bg-white text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-50 hover:text-neutral-900'
                   }`}
                 >
-                  {category}
+                  {cat.name}
                 </button>
               )
             })}
           </div>
 
           <div className="flex items-center gap-3">
-            <label
-              htmlFor="sort-products"
-              className="text-sm font-medium text-neutral-600"
-            >
+            <label htmlFor="sort-products" className="text-sm font-medium text-neutral-500">
               Sort by
             </label>
             <select
               id="sort-products"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-900 transition-colors duration-200 focus:border-neutral-400 focus:outline-none"
+              className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-900 transition-colors duration-200 hover:border-neutral-300 focus:border-neutral-400 focus:ring-0"
             >
               <option value="featured">Featured</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
+              <option value="price-asc">Price: Low → High</option>
+              <option value="price-desc">Price: High → Low</option>
             </select>
           </div>
         </div>
 
+        {/* Product Count & Error */}
         <div className="mt-8 flex items-center justify-between">
-          {loading ? (
-            <p className="text-sm text-neutral-500">Loading products…</p>
-          ) : error ? (
-            <p className="text-sm text-red-600">{error}</p>
-          ) : (
-            <p className="text-sm text-neutral-500">
-              {sortedProducts.length}{' '}
-              {sortedProducts.length === 1 ? 'product' : 'products'}
+          {error ? (
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-red-600">{error}</p>
+              <button
+                onClick={loadData}
+                className="text-sm font-medium text-neutral-900 underline underline-offset-2 hover:no-underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : !loading ? (
+            <p className="text-sm text-neutral-400">
+              {sortedProducts.length} {sortedProducts.length === 1 ? 'product' : 'products'}
             </p>
-          )}
+          ) : null}
         </div>
 
+        {/* Product Grid */}
         <div className="mt-6">
-          {!loading && !error && <ProductGrid products={sortedProducts} />}
+          {!error && <ProductGrid products={sortedProducts} loading={loading} />}
         </div>
       </div>
     </main>

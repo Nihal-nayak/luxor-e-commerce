@@ -5,7 +5,6 @@ import com.luxor.shoppingcartapi.dtos.UserDto;
 import com.luxor.shoppingcartapi.service.UserService;
 import lombok.Data;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,12 +23,6 @@ public class UserController {
     public UserDto getUser(Authentication authentication){
         String email = authentication.getName();
         return userService.getCurrentUser(email);
-    }
-
-    @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("/Admin-test")
-    public String  HelloAdmin(){
-        return "Helllo Admin !";
     }
 
 }
